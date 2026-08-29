@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Adiwiyata — Penilaian Mingguan</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f4f7f5;color:#17251c}
+header{background:linear-gradient(135deg,#176b3a,#2e9b58);color:#fff;padding:24px 16px 30px}
+.wrap{max-width:1050px;margin:auto}h1{margin:0 0 5px;font-size:27px}header p{margin:0;opacity:.9}
+main{max-width:1050px;margin:-14px auto 40px;padding:0 14px}.card{background:#fff;border-radius:16px;padding:18px;margin:14px 0;box-shadow:0 5px 18px #173c2412}
+.controls,.formgrid{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:end}.formgrid{grid-template-columns:1fr 1fr auto}
+label{font-size:13px;font-weight:700;display:block;margin-bottom:6px}input,select,button{font:inherit;border-radius:10px;padding:11px 12px}input,select{width:100%;border:1px solid #d6e1d9;background:#fff}button{cursor:pointer;border:0;background:#176b3a;color:#fff;font-weight:700}.secondary{background:#edf4ef!important;color:#176b3a}.danger{background:#b63b3b!important;color:#fff}
+.section-title{display:flex;justify-content:space-between;gap:10px;align-items:center}.section-title h2{margin:0;font-size:19px}.actions{display:flex;gap:8px;flex-wrap:wrap}
+.small{font-size:12px;color:#65736a}.badge{display:inline-block;background:#e7f5eb;color:#176b3a;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:700}
+.history,.cohorts{display:flex;gap:8px;overflow:auto;padding-bottom:4px;margin-top:12px}.weekbtn,.cohortBtn{white-space:nowrap}.active{background:#176b3a!important;color:#fff!important}
+table{width:100%;border-collapse:collapse;margin-top:10px}th,td{padding:12px 9px;border-bottom:1px solid #edf1ee;text-align:left}th{font-size:12px;color:#637066;text-transform:uppercase}.rank{text-align:center;font-size:20px}.score{font-weight:800;color:#176b3a}
+.note{font-size:13px;color:#65736a;margin-top:10px}.empty{text-align:center;padding:24px;color:#77827a}
+.month-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.month-box{background:#f6f9f7;border:1px solid #e5ece7;border-radius:12px;padding:12px}.month-box b{display:block;font-size:18px;margin-top:4px}.growth-up{color:#176b3a}.growth-down{color:#b63b3b}.growth-flat{color:#65736a}
+.score-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #edf1ee}
+.score-actions{display:flex;gap:5px}.mini{padding:6px 8px;border-radius:8px;font-size:12px}.edit{background:#edf4ef!important;color:#176b3a}.del{background:#b63b3b!important;color:#fff}
+#editBox{display:none;position:fixed;inset:0;background:#0008;z-index:20;align-items:center;justify-content:center;padding:16px}
+#editBox .modal{background:#fff;border-radius:16px;padding:18px;width:min(420px,100%)}
+@media(max-width:700px){h1{font-size:23px}.controls,.formgrid{grid-template-columns:1fr}.month-grid{grid-template-columns:repeat(2,1fr)}table{font-size:13px}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+<header><div class="wrap"><h1>🌱 Penilaian Adiwiyata</h1><p>Rekap mingguan, peringkat per angkatan, dan statistik pertumbuhan 1 bulan.</p></div></header>
+<main>
+<section class="card">
+<div class="controls">
+<div><label>Periode</label><select id="week"></select></div>
+<button onclick="newWeek()">+ Minggu Baru</button>
+<button class="secondary" onclick="exportData()">Cadangkan Data</button>
+</div>
+<div id="weekHistory" class="history"></div>
+</section>
+
+<section class="card">
+<div class="section-title"><h2>➕ Tambah Penilaian</h2><span class="badge" id="currentWeek"></span></div>
+<div class="cohorts" id="inputCohorts" style="margin-top:14px">
+<button class="cohortBtn active" data-input-cohort="Kelas 7" onclick="setInputCohort('Kelas 7')">7️⃣ Kelas 7</button>
+<button class="cohortBtn secondary" data-input-cohort="Kelas 8" onclick="setInputCohort('Kelas 8')">8️⃣ Kelas 8</button>
+<button class="cohortBtn secondary" data-input-cohort="Kelas 9" onclick="setInputCohort('Kelas 9')">9️⃣ Kelas 9</button>
+</div>
+<div class="formgrid" style="margin-top:10px">
+<div><label>Kelas</label><select id="classSelect"></select></div>
+<div><label>Nilai mentah</label><input id="score" type="number" min="0" step="1" placeholder="Boleh lebih dari 200"></div>
+<button onclick="addScore()">Tambah</button>
+</div>
+<div class="note">Setiap kelas boleh dinilai sebanyak apa pun. Nilai langsung dijumlahkan.</div>
+</section>
+
+<section class="card">
+<div class="section-title"><h2>🏆 Peringkat Mingguan</h2><span class="badge" id="rankLabel">Semua</span></div>
+<div class="cohorts">
+<button class="cohortBtn active statBtn" data-cohort="Semua" onclick="setCohort('Semua')">Semua</button>
+<button class="cohortBtn secondary statBtn" data-cohort="Kelas 7" onclick="setCohort('Kelas 7')">Kelas 7</button>
+<button class="cohortBtn secondary statBtn" data-cohort="Kelas 8" onclick="setCohort('Kelas 8')">Kelas 8</button>
+<button class="cohortBtn secondary statBtn" data-cohort="Kelas 9" onclick="setCohort('Kelas 9')">Kelas 9</button>
+</div>
+<div id="ranking"></div>
+</section>
+
+<section class="card">
+<div class="section-title"><h2>📈 Statistik Pertumbuhan 1 Bulan</h2><div class="actions"><span class="badge" id="monthSummary">4 minggu</span><button onclick="downloadMonthlyPDF()">📄 Download PDF</button></div></div>
+<div class="cohorts">
+<button class="cohortBtn statBtn active" data-cohort="Semua" onclick="setCohort('Semua')">Semua</button>
+<button class="cohortBtn statBtn secondary" data-cohort="Kelas 7" onclick="setCohort('Kelas 7')">Kelas 7</button>
+<button class="cohortBtn statBtn secondary" data-cohort="Kelas 8" onclick="setCohort('Kelas 8')">Kelas 8</button>
+<button class="cohortBtn statBtn secondary" data-cohort="Kelas 9" onclick="setCohort('Kelas 9')">Kelas 9</button>
+</div>
+<div class="note">Statistik dan pertumbuhan hanya membandingkan kelas dalam angkatan yang dipilih.</div>
+<div id="monthlyStats" style="margin-top:14px"></div>
+</section>
+
+<section class="card">
+<div class="section-title"><h2>📋 Detail Penilaian</h2><button class="danger" onclick="clearWeek()">Hapus Minggu Ini</button></div>
+<div id="details"></div>
+</section>
+</main>
+<div id="editBox">
+ <div class="modal">
+  <h3 style="margin:0 0 6px">✏️ Edit Nilai</h3>
+  <div class="small" id="editInfo"></div>
+  <label style="margin-top:14px">Nilai mentah baru</label>
+  <input id="editInput" type="number" min="0" step="1">
+  <div class="actions" style="margin-top:12px;justify-content:flex-end">
+   <button class="secondary" onclick="closeEdit()">Batal</button>
+   <button onclick="saveEdit()">Simpan</button>
+  </div>
+ </div>
+</div>
+
+<script>
+const cohorts={
+ "Semua":["7A","7B","7C","7D","8A","8B","8C","8D","9A","9B","9C","9D"],
+ "Kelas 7":["7A","7B","7C","7D"],
+ "Kelas 8":["8A","8B","8C","8D"],
+ "Kelas 9":["9A","9B","9C","9D"]
+};
+const classes=cohorts["Semua"],KEY="adiwiyata_weekly_v1";
+let data=JSON.parse(localStorage.getItem(KEY)||'{"weeks":{"Minggu 1":{}},"current":"Minggu 1"}');
+let currentCohort="Semua";
+let inputCohort="Kelas 7";
+let editing={className:null,index:null};
+
+function save(){localStorage.setItem(KEY,JSON.stringify(data));}
+function visibleClasses(){return cohorts[currentCohort];}
+
+function setup(){
+ const ws=document.getElementById("week"),cs=document.getElementById("classSelect");
+ ws.innerHTML=Object.keys(data.weeks).map(w=>"<option>"+w+"</option>").join("");
+ ws.value=data.current;
+ setInputCohort(inputCohort);
+ render();
+}
+function setInputCohort(c){
+ inputCohort=c;
+ const cs=document.getElementById("classSelect");
+ cs.innerHTML=cohorts[c].map(x=>"<option>"+x+"</option>").join("");
+ document.querySelectorAll("#inputCohorts .cohortBtn").forEach(b=>{
+   b.classList.toggle("active",b.dataset.inputCohort===c);
+   b.classList.toggle("secondary",b.dataset.inputCohort!==c);
+ });
+}
+function setCohort(c){
+ currentCohort=c;
+ document.querySelectorAll(".statBtn,.cohortBtn").forEach(b=>{
+   const key=b.dataset.cohort;
+   if(key!==undefined){
+     b.classList.toggle("active",key===c);
+     b.classList.toggle("secondary",key!==c);
+   }
+ });
+ document.getElementById("rankLabel").textContent=c;
+ render();
+}
+function render(){
+ data.current=document.getElementById("week").value||data.current;
+ save();
+ document.getElementById("currentWeek").textContent=data.current;
+ document.getElementById("weekHistory").innerHTML=Object.keys(data.weeks).map(w=>
+   "<button class='weekbtn "+(w===data.current?"active":"secondary")+"' onclick=\"selectWeek('"+w+"')\">"+w+"</button>"
+ ).join("");
+
+ const scores=data.weeks[data.current]||{};
+ const rows=visibleClasses().map(c=>{
+   const arr=Array.isArray(scores[c])?scores[c]:[];
+   return {c,arr,total:arr.reduce((s,v)=>s+Number(v),0)};
+ }).filter(x=>x.arr.length).sort((a,b)=>b.total-a.total);
+
+ document.getElementById("ranking").innerHTML=rows.length?
+ "<table><thead><tr><th>Peringkat</th><th>Kelas</th><th>Penilaian</th><th>Total Mentah</th><th>Skor / 200</th></tr></thead><tbody>"+
+ rows.map((x,i)=>{
+   const max=rows.length?Math.max(...rows.map(r=>r.total)):0;
+   const norm=max?x.total/max*200:0;
+   return "<tr><td class='rank'>"+(i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1)+"</td><td><b>"+x.c+"</b></td><td>"+x.arr.length+" kali</td><td>"+x.total+"</td><td class='score'><b>"+norm.toFixed(2)+"</b> / 200</td></tr>";
+ }).join("")+
+ "</tbody></table>":"<div class='empty'>Belum ada penilaian untuk "+currentCohort+" pada minggu ini.</div>";
+
+ document.getElementById("details").innerHTML=rows.length?rows.map(x=>
+   "<div style='padding:13px 0;border-bottom:1px solid #edf1ee'><b>"+x.c+"</b> <span class='small'>("+x.arr.length+" penilaian)</span>"+
+   x.arr.map((v,i)=>
+     "<div class='score-row'><span><span class='badge'>#"+(i+1)+"</span> <b>"+v+"</b></span>"+
+     "<span class='score-actions'><button class='mini edit' onclick=\"editScore('"+x.c+"',"+i+")\">Edit</button>"+
+     "<button class='mini del' onclick=\"deleteScore('"+x.c+"',"+i+")\">Hapus</button></span></div>"
+   ).join("")+
+   "<div class='small' style='margin-top:7px'>Total mentah: <b>"+x.total+"</b></div></div>"
+ ).join(""):"<div class='empty'>Belum ada detail penilaian.</div>";
+
+ renderMonthlyStats();
+}
+function renderMonthlyStats(){
+ const weeks=Object.keys(data.weeks).slice(-4),vis=visibleClasses(),totals={};
+ vis.forEach(c=>totals[c]=weeks.map(w=>
+   (data.weeks[w]&&Array.isArray(data.weeks[w][c])?data.weeks[w][c]:[]).reduce((s,v)=>s+Number(v),0)
+ ));
+ const ranked=vis.map(c=>{
+   const vals=totals[c],first=vals[0]||0,last=vals[vals.length-1]||0,change=last-first;
+   return {c,vals,first,last,change,pct:first?change/first*100:null};
+ }).filter(x=>x.vals.some(v=>v>0)).sort((a,b)=>b.last-a.last);
+ document.getElementById("monthSummary").textContent=weeks.length+" minggu • "+currentCohort;
+ if(!ranked.length){document.getElementById("monthlyStats").innerHTML="<div class='empty'>Belum ada data penilaian.</div>";return;}
+ const best=ranked.slice().sort((a,b)=>b.change-a.change)[0];
+ const maxLast=Math.max(...ranked.map(x=>x.last));
+ const head=weeks.map(w=>"<th>"+w.replace("Minggu ","M")+"</th>").join("");
+ document.getElementById("monthlyStats").innerHTML=
+ "<div class='month-grid'><div class='month-box'><span class='small'>Skor tertinggi terbaru</span><b>"+ranked[0].c+"</b><span class='small'>"+(maxLast?ranked[0].last/maxLast*200:0).toFixed(2)+" / 200</span></div>"+
+ "<div class='month-box'><span class='small'>Pertumbuhan terbaik</span><b class='growth-up'>"+best.c+"</b><span class='small'>"+(best.change>=0?"+":"")+best.change+" mentah</span></div>"+
+ "<div class='month-box'><span class='small'>Angkatan</span><b>"+currentCohort+"</b><span class='small'>"+weeks[0]+" – "+weeks[weeks.length-1]+"</span></div>"+
+ "<div class='month-box'><span class='small'>Nilai tertinggi mentah</span><b>"+maxLast+"</b><span class='small'>dikonversi menjadi 200</span></div></div>"+
+ "<div style='overflow:auto;margin-top:14px'><table><thead><tr><th>Kelas</th>"+head+"<th>Skor terbaru / 200</th><th>Perubahan</th></tr></thead><tbody>"+
+ ranked.map(x=>{
+   const latest=x.last,score=maxLast?latest/maxLast*200:0,cl=x.change>0?"growth-up":x.change<0?"growth-down":"growth-flat",sg=x.change>0?"+":"";
+   return "<tr><td><b>"+x.c+"</b></td>"+x.vals.map(v=>"<td>"+v+"</td>").join("")+
+   "<td class='"+cl+"'><b>"+score.toFixed(2)+"</b></td><td class='"+cl+"'><b>"+sg+x.change+"</b></td></tr>";
+ }).join("")+
+ "</tbody></table></div>";
+}
+function addScore(){
+ const c=document.getElementById("classSelect").value,input=document.getElementById("score"),v=Number(input.value);
+ if(input.value===""||v<0){alert("Masukkan nilai yang valid.");return;}
+ const w=data.weeks[data.current]||(data.weeks[data.current]={});
+ if(!Array.isArray(w[c]))w[c]=[];
+ w[c].push(v);input.value="";save();render();
+}
+function editScore(className,index){
+ const arr=data.weeks[data.current]&&data.weeks[data.current][className];
+ if(!arr||arr[index]===undefined)return;
+ editing={className,index};
+ document.getElementById("editInfo").textContent=className+" • Penilaian #"+(index+1);
+ document.getElementById("editInput").value=arr[index];
+ document.getElementById("editBox").style.display="flex";
+}
+function closeEdit(){editing={className:null,index:null};document.getElementById("editBox").style.display="none";}
+function saveEdit(){
+ const input=document.getElementById("editInput"),v=Number(input.value);
+ if(input.value===""||v<0){alert("Masukkan nilai yang valid.");return;}
+ const arr=data.weeks[data.current]&&data.weeks[data.current][editing.className];
+ if(!arr)return;
+ arr[editing.index]=v;save();closeEdit();render();
+}
+function deleteScore(className,index){
+ if(!confirm("Hapus nilai "+className+" #"+(index+1)+"?"))return;
+ const arr=data.weeks[data.current]&&data.weeks[data.current][className];
+ if(!arr)return;
+ arr.splice(index,1);
+ if(!arr.length)delete data.weeks[data.current][className];
+ save();render();
+}
+function selectWeek(w){data.current=w;document.getElementById("week").value=w;render();}
+function newWeek(){
+ const n=Object.keys(data.weeks).length+1,name="Minggu "+n;
+ data.weeks[name]={};data.current=name;save();setup();
+}
+function clearWeek(){
+ if(confirm("Hapus semua penilaian pada "+data.current+"?")){data.weeks[data.current]={};save();render();}
+}
+function exportData(){
+ const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+ const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="rekap-adiwiyata.json";a.click();URL.revokeObjectURL(a.href);
+}
+function downloadMonthlyPDF(){
+ if(!window.jspdf){alert("PDF belum siap. Pastikan internet aktif lalu coba lagi.");return;}
+ const doc=new jspdf.jsPDF({orientation:"landscape",unit:"mm",format:"a4"});
+ const weeks=Object.keys(data.weeks).slice(-4),vis=visibleClasses(),totals={};
+ vis.forEach(c=>totals[c]=weeks.map(w=>(data.weeks[w]&&Array.isArray(data.weeks[w][c])?data.weeks[w][c]:[]).reduce((s,v)=>s+Number(v),0)));
+ const ranked=vis.map(c=>{const vals=totals[c],first=vals[0]||0,last=vals[vals.length-1]||0,change=last-first;return{c,vals,first,last,change,pct:first?change/first*100:null};}).filter(x=>x.vals.some(v=>v>0)).sort((a,b)=>b.last-a.last);
+ const max=ranked.length?Math.max(...ranked.map(x=>x.last)):0;
+ const head=["Kelas"].concat(weeks.map(w=>w.replace("Minggu ","M"))).concat(["Skor / 200","Perubahan"]);
+ const body=ranked.map(x=>[x.c].concat(x.vals).concat([max?(x.last/max*200).toFixed(2):"0", (x.change>0?"+":"")+x.change]));
+ doc.setFontSize(18);doc.text("LAPORAN STATISTIK ADIWIYATA",14,15);
+ doc.setFontSize(11);doc.text("Cakupan: "+currentCohort+" | "+weeks.length+" minggu terakhir | Skala maksimal 200",14,22);
+ doc.autoTable({startY:28,head:[head],body:body,theme:"grid",styles:{fontSize:9,cellPadding:3},headStyles:{fontStyle:"bold"}});
+ doc.save("statistik-adiwiyata-"+currentCohort.toLowerCase().replace(/\s+/g,"-")+".pdf");
+}
+document.getElementById("week").addEventListener("change",render);
+setup();
+</script>
+</body>
+</html>
